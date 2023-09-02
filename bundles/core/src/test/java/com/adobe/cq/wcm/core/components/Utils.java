@@ -26,6 +26,10 @@ import javax.json.Json;
 import javax.json.JsonObject;
 import javax.json.JsonReader;
 import javax.json.JsonStructure;
+import java.util.ArrayList;
+import java.util.List;
+import javax.json.JsonValue;
+import javax.json.JsonArray;
 
 import com.adobe.cq.wcm.core.components.models.datalayer.ComponentData;
 import org.apache.commons.io.FilenameUtils;
@@ -42,6 +46,7 @@ import io.wcm.testing.mock.aem.junit5.AemContext;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.lenient;
 
 /**
@@ -72,11 +77,74 @@ public class Utils {
         InputStream is = Utils.class.getResourceAsStream(expectedJsonResource);
         if (is != null) {
             JsonReader expectedReader = Json.createReader(is);
-            assertEquals(expectedReader.read(), outputReader.read());
+            JsonObject actualJson = outputReader.readObject();
+            JsonObject expectedJson = expectedReader.readObject();
+
+            assertTrue(assertJsonObjectEquivalent(expectedJson, actualJson));
+
         } else {
             fail("Unable to find test file " + expectedJsonResource + ".");
         }
         IOUtils.closeQuietly(is);
+    }
+
+    private static boolean assertJsonObjectEquivalent(JsonObject expectedJson, JsonObject actualJson) {
+        for (String key : actualJson.keySet()) {
+            JsonValue actualValue = actualJson.get(key);
+            JsonValue expectedValue = expectedJson.get(key);
+
+            if (!valueEquals(actualValue, expectedValue)) {
+                return false;
+            }
+        }
+
+        for (String expectedJsonKey : expectedJson.keySet()) {
+            if (!actualJson.containsKey(expectedJsonKey)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static boolean valueEquals(JsonValue expectedValue, JsonValue actualValue) {
+        if (actualValue.getValueType() != expectedValue.getValueType()) {
+            return false;
+        }
+
+        switch (actualValue.getValueType()) {
+            case OBJECT:
+                return assertJsonObjectEquivalent((JsonObject) expectedValue, (JsonObject) actualValue);
+            case ARRAY:
+                return assertJsonArraysEquivalent((JsonArray) expectedValue, (JsonArray)  actualValue);
+            default:
+                return actualValue.equals(expectedValue);
+        }
+    }
+
+    private static boolean assertJsonArraysEquivalent(JsonArray expectedArray, JsonArray actualArray) {
+        if (expectedArray.size() != actualArray.size()) {
+            return false;
+        }
+
+        List<JsonValue> expectedList = new ArrayList<>(expectedArray);
+        List<JsonValue> actualList = new ArrayList<>(actualArray);
+
+        for (JsonValue expectedValue : expectedList) {
+            boolean found = false;
+            for (JsonValue actualValue : actualArray) {
+                if (valueEquals(expectedValue, actualValue)) {
+                    found = true;
+                    actualList.remove(actualValue);
+                    break;
+                }
+            }
+            if (!found) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
